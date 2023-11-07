@@ -1,0 +1,48 @@
+#! /usr/bin/env python
+
+from statemanager.code import utf8bencode, utf8bdecode
+from statemanager.hash import mktarget
+from statemanager.client import send_request
+from base64 import urlsafe_b64encode
+from socket import socket, AF_UNIX, SOCK_STREAM, SHUT_WR
+import os
+import os.path
+import random
+import pathlib
+
+cwd = os.getcwd()
+socketpath = cwd + '/test/test.sock'
+
+# Construct test data
+# REMINDER: random.randbytes is NOT cryptographically sound.
+# Don't carry it forward unthinkingly.
+nonce = urlsafe_b64encode(random.randbytes(32)).rstrip(b'=').decode('utf8')
+hashed = {
+    'basedir': f'{cwd}/test/state',
+    'hashalgo': 'sha256-base64url',
+    'type': 'simple',
+    'nonce': nonce,
+}
+target = mktarget(hashed)
+source = cwd + '/test/repo' + str(random.randint(1, 9)) + '/' + os.path.basename(target)
+request = {
+    'version': 1,
+    'action': 'link',
+    'hashed': hashed,
+    'target': target,
+    'source': source,
+}
+
+# Create the source dir
+os.makedirs(source, exist_ok=True)
+
+# Send the request
+response = send_request(socketpath, request)
+
+if response['status'] == 'success':
+    exit(0)
+else:
+    print('Request failed because "' + response['reason'] +
+          '". Server message:')
+    print(response['message'])
+    exit(1)
